@@ -15,63 +15,47 @@ class GoatedAPI:
     """Client for interacting with goated.com API."""
 
     def __init__(self):
-        self.base_url = os.getenv('GOATED_API_BASE_URL', 'https://goated.com/api')
-        self.api_key = os.getenv('GOATED_API_KEY', '')
+        # Use the specific affiliate API endpoint
+        self.api_url = 'https://apis.goated.com/user/affiliate/referral-leaderboard/UCW47GH'
         self.session = None
         
         # Rate limiting
-        self.last_request_time = {}
-        self.request_count = {}
+        self.last_request_time = None
         
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
         if self.session is None or self.session.closed:
             headers = {
                 'User-Agent': 'GoatedWagerBot/1.0',
-                'Content-Type': 'application/json'
+                'Accept': 'application/json'
             }
-            
-            if self.api_key:
-                headers['Authorization'] = f'Bearer {self.api_key}'
-                # or headers['X-API-Key'] = self.api_key depending on their auth method
-            
+
             self.session = aiohttp.ClientSession(
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30)
             )
-        
+
         return self.session
     
-    async def _rate_limit_check(self, endpoint: str) -> None:
-        """Check rate limiting before making request."""
+    async def _rate_limit_check(self) -> None:
+        """Simple rate limiting - wait 1 second between requests."""
         now = datetime.now()
-        minute_ago = now - timedelta(minutes=1)
-        
-        # Clean old requests
-        if endpoint in self.request_count:
-            self.request_count[endpoint] = [
-                req_time for req_time in self.request_count[endpoint] 
-                if req_time > minute_ago
-            ]
-        else:
-            self.request_count[endpoint] = []
-        
-        # Check if we're over the limit
-        max_requests = int(os.getenv('MAX_REQUESTS_PER_MINUTE', '30'))
-        if len(self.request_count[endpoint]) >= max_requests:
-            sleep_time = 60 - (now - self.request_count[endpoint][0]).seconds
-            logger.warning(f"Rate limit reached for {endpoint}, sleeping for {sleep_time}s")
-            await asyncio.sleep(sleep_time)
-        
-        # Record this request
-        self.request_count[endpoint].append(now)
+
+        if self.last_request_time:
+            time_since_last = (now - self.last_request_time).total_seconds()
+            if time_since_last < 1.0:  # Wait at least 1 second between requests
+                sleep_time = 1.0 - time_since_last
+                await asyncio.sleep(sleep_time)
+
+        self.last_request_time = now
     
-    async def _make_request(self, endpoint: str, params: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
+    async def _make_request(self, params: dict = None) -> Optional[Dict[str, Any]]:
         """Make HTTP request to the API."""
-        await self._rate_limit_check(endpoint)
-        
+        await self._rate_limit_check()
+
         session = await self._get_session()
-        url = f"{self.base_url}/{endpoint.lstrip('/')}"
+        # Use the direct API URL since we only have one endpoint
+        url = self.api_url
         
         try:
             logger.info(f"Making request to {url}")
@@ -97,31 +81,25 @@ class GoatedAPI:
             logger.error(f"Unexpected error making API request: {e}")
             return None
     
-    async def find_player_by_username(self, username: str, affiliate_ids: list = None) -> Optional[Dict[str, Any]]:
-        """Find a player by username across affiliate networks."""
+    async def find_player_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """Find a player by username in the UCW47GH affiliate network."""
         try:
-            # Default list of affiliate IDs to search through
-            # You can expand this list with known affiliate IDs
-            if affiliate_ids is None:
-                affiliate_ids = ["UCW47GH", "AFFILIATE2", "AFFILIATE3"]  # Add more affiliate IDs as needed
+            # Use the specific affiliate API endpoint
+            response = await self._make_request()
 
-            for affiliate_id in affiliate_ids:
-                endpoint = f"user/affiliate/referral-leaderboard/{affiliate_id}"
-                response = await self._make_request(endpoint)
+            if response and response.get('success'):
+                players = response.get('data', [])
 
-                if response and response.get('success'):
-                    players = response.get('data', [])
-
-                    # Search for the player by username (case-insensitive)
-                    for player in players:
-                        if player.get('name', '').lower() == username.lower():
-                            # Found the player! Return their data with affiliate info
-                            return {
-                                'uid': player.get('uid'),
-                                'name': player.get('name'),
-                                'wagered': player.get('wagered', {}),
-                                'affiliate_id': affiliate_id,
-                                'found': True
+                # Search for the player by username (case-insensitive)
+                for player in players:
+                    if player.get('name', '').lower() == username.lower():
+                        # Found the player! Return their data
+                        return {
+                            'uid': player.get('uid'),
+                            'name': player.get('name'),
+                            'wagered': player.get('wagered', {}),
+                            'affiliate_id': 'UCW47GH',
+                            'found': True
                             }
 
             # Player not found in any affiliate network
@@ -257,14 +235,20 @@ class GoatedAPI:
             return None
     
     async def get_full_leaderboard(self, limit: int = 100) -> Optional[Dict[str, Any]]:
-        """Get the full leaderboard (optional feature)."""
+        """Get the full leaderboard from UCW47GH affiliate."""
         try:
-            endpoint = "leaderboard"
-            params = {'limit': limit}
-            response = await self._make_request(endpoint, params)
+            response = await self._make_request()
 
-            if response:
-                return response
+            if response and response.get('success'):
+                players = response.get('data', [])
+                # Limit the results if requested
+                if limit and len(players) > limit:
+                    players = players[:limit]
+
+                return {
+                    'success': True,
+                    'data': players
+                }
 
             return None
 
@@ -273,85 +257,21 @@ class GoatedAPI:
             return None
 
     async def get_top_leaderboard_players(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """Get top players from all affiliate networks for weekly snapshot."""
+        """Get top players from UCW47GH affiliate for weekly snapshot."""
         try:
-            # Get affiliate IDs from registered users
-            from database.connection import get_all_active_users
+            response = await self._make_request()
 
-            users = await get_all_active_users()
-            affiliate_ids = set()
+            if response and response.get('success'):
+                players = response.get('data', [])
 
-            # Find affiliate networks by checking where our users are registered
-            for user in users:
-                username = user.get('goated_username', '')
-                if username:
-                    try:
-                        player_data = await self.find_player_by_username(username)
-                        if player_data and player_data.get('affiliate_id'):
-                            affiliate_ids.add(player_data['affiliate_id'])
-                    except Exception as e:
-                        logger.warning(f"Error finding affiliate for user {username}: {e}")
+                # Sort by total wagered (descending) and limit results
+                sorted_players = sorted(
+                    players,
+                    key=lambda x: x.get('wagered', {}).get('total', 0),
+                    reverse=True
+                )
 
-            # Convert to list and add some common ones as fallback
-            affiliate_ids = list(affiliate_ids)
-            if not affiliate_ids:
-                # Fallback to common affiliate IDs if none found
-                affiliate_ids = ["UCW47GH", "GOATED", "GOATED2", "GOATED3"]
-
-            logger.info(f"Checking affiliate networks: {affiliate_ids}")
-
-            all_players = []
-
-            # Fetch players from each affiliate network
-            for affiliate_id in affiliate_ids:
-                try:
-                    endpoint = f"user/affiliate/referral-leaderboard/{affiliate_id}"
-                    response = await self._make_request(endpoint)
-
-                    if response and response.get('success'):
-                        players = response.get('data', [])
-
-                        # Add affiliate_id to each player and extract relevant data
-                        for player in players:
-                            wagered = player.get('wagered', {})
-                            player_data = {
-                                'username': player.get('name', ''),
-                                'affiliate_id': affiliate_id,
-                                'daily_wager': wagered.get('daily', 0),
-                                'weekly_wager': wagered.get('weekly', 0),
-                                'last_7_days_wager': wagered.get('last_7_days', wagered.get('weekly', 0)),
-                                'monthly_wager': wagered.get('monthly', 0),
-                                'all_time_wager': wagered.get('all_time', 0),
-                                'total_players': len(players)
-                            }
-                            all_players.append(player_data)
-
-                    # Small delay to avoid rate limiting
-                    await asyncio.sleep(0.1)
-
-                except Exception as e:
-                    logger.warning(f"Error fetching leaderboard for affiliate {affiliate_id}: {e}")
-                    continue
-
-            # Sort by weekly wager (or last_7_days_wager) descending and return top players
-            all_players.sort(key=lambda x: x.get('last_7_days_wager', x.get('weekly_wager', 0)), reverse=True)
-
-            # Filter out players with 0 weekly wager for better results
-            top_players = [p for p in all_players if p.get('last_7_days_wager', p.get('weekly_wager', 0)) > 0]
-
-            # If we don't have enough players with wagers, include some with 0 wagers
-            if len(top_players) < limit:
-                zero_wager_players = [p for p in all_players if p.get('last_7_days_wager', p.get('weekly_wager', 0)) == 0]
-                top_players.extend(zero_wager_players[:limit - len(top_players)])
-
-            result = top_players[:limit]
-
-            logger.info(f"Fetched {len(all_players)} total players, returning top {len(result)} by weekly wager")
-            if result:
-                top_wager = result[0].get('last_7_days_wager', result[0].get('weekly_wager', 0))
-                logger.info(f"Top player weekly wager: ${top_wager:,.2f}")
-
-            return result
+                return sorted_players[:limit] if limit else sorted_players
 
         except Exception as e:
             logger.error(f"Error fetching top leaderboard players: {e}")
