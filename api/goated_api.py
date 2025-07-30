@@ -5,19 +5,17 @@ Goated.com API client for fetching affiliate data.
 import aiohttp
 import asyncio
 import logging
+import os
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
-
-from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 class GoatedAPI:
     """Client for interacting with goated.com API."""
-    
+
     def __init__(self):
-        self.settings = get_settings()
-        self.base_url = self.settings.GOATED_API_URL
+        self.base_url = os.getenv('GOATED_API_BASE_URL', 'https://goated.com/api')
         self.api_key = self.settings.GOATED_API_KEY
         self.session = None
         

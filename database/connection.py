@@ -5,20 +5,19 @@ Database connection and operations for the Goated Wager Tracker Bot.
 import sqlite3
 import asyncio
 import logging
+import os
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import json
-
-from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 class DatabaseManager:
     """Manages database connections and operations."""
-    
+
     def __init__(self):
-        self.settings = get_settings()
-        self.db_path = self.settings.DATABASE_URL.replace('sqlite:///', '')
+        database_url = os.getenv('DATABASE_URL', 'sqlite:///goated_bot.db')
+        self.db_path = database_url.replace('sqlite:///', '')
         self._lock = asyncio.Lock()
     
     async def init_database(self):

@@ -34,21 +34,20 @@ from bot.handlers import (
     capture_leaderboard,
     error_handler
 )
-from config.settings import get_settings
-
 def setup_logging():
     """Set up logging configuration."""
-    settings = get_settings()
-    
+    log_level = os.getenv('LOG_LEVEL', 'INFO')
+    log_file = os.getenv('LOG_FILE', 'bot.log')
+
     logging.basicConfig(
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=getattr(logging, settings.LOG_LEVEL),
+        level=getattr(logging, log_level),
         handlers=[
-            logging.FileHandler(settings.LOG_FILE),
+            logging.FileHandler(log_file),
             logging.StreamHandler(sys.stdout)
         ]
     )
-    
+
     # Set up logger for this module
     logger = logging.getLogger(__name__)
     return logger
@@ -56,16 +55,16 @@ def setup_logging():
 def main():
     """Main function to start the bot."""
     logger = setup_logging()
-    settings = get_settings()
 
-    if not settings.TELEGRAM_BOT_TOKEN:
+    bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if not bot_token:
         logger.error("TELEGRAM_BOT_TOKEN not found in environment variables")
         sys.exit(1)
 
     logger.info("Starting Goated Wager Tracker Bot...")
 
     # Create the Application
-    application = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
+    application = Application.builder().token(bot_token).build()
 
     # Add command handlers
     application.add_handler(CommandHandler("start", start_handler))
