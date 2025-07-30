@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 from dotenv import load_dotenv
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler
 
 # Load environment variables
 load_dotenv()
@@ -62,6 +62,16 @@ def main():
         sys.exit(1)
 
     logger.info("Starting Goated Wager Tracker Bot...")
+
+    # Initialize database
+    try:
+        from database.connection import db_manager
+        import asyncio
+        asyncio.run(db_manager.init_database())
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        sys.exit(1)
 
     # Create the Application
     application = Application.builder().token(bot_token).build()

@@ -16,7 +16,7 @@ class GoatedAPI:
 
     def __init__(self):
         self.base_url = os.getenv('GOATED_API_BASE_URL', 'https://goated.com/api')
-        self.api_key = self.settings.GOATED_API_KEY
+        self.api_key = os.getenv('GOATED_API_KEY', '')
         self.session = None
         
         # Rate limiting
@@ -57,7 +57,8 @@ class GoatedAPI:
             self.request_count[endpoint] = []
         
         # Check if we're over the limit
-        if len(self.request_count[endpoint]) >= self.settings.MAX_REQUESTS_PER_MINUTE:
+        max_requests = int(os.getenv('MAX_REQUESTS_PER_MINUTE', '30'))
+        if len(self.request_count[endpoint]) >= max_requests:
             sleep_time = 60 - (now - self.request_count[endpoint][0]).seconds
             logger.warning(f"Rate limit reached for {endpoint}, sleeping for {sleep_time}s")
             await asyncio.sleep(sleep_time)
