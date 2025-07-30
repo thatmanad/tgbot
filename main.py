@@ -67,7 +67,15 @@ def main():
     try:
         from database.connection import db_manager
         import asyncio
-        asyncio.run(db_manager.init_database())
+
+        # Create new event loop if none exists
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        loop.run_until_complete(db_manager.init_database())
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
@@ -123,6 +131,17 @@ def main():
 
     # Start the bot
     logger.info("Bot is starting...")
+
+    # Ensure we have an event loop for the bot
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
     application.run_polling(allowed_updates=["message", "callback_query"])
 
 if __name__ == '__main__':

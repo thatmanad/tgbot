@@ -99,6 +99,16 @@ class WeeklyLeaderboardScheduler:
     def start_scheduler(self):
         """Start the weekly leaderboard capture scheduler."""
         try:
+            # Check if we have an event loop
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    raise RuntimeError("Event loop is closed")
+            except RuntimeError:
+                # No event loop available, skip scheduler for now
+                logger.warning("No event loop available, skipping weekly scheduler initialization")
+                return
+
             # Schedule for every Sunday at 7:00 PM CST
             trigger = CronTrigger(
                 day_of_week='sun',  # Sunday
@@ -106,7 +116,7 @@ class WeeklyLeaderboardScheduler:
                 minute=0,          # :00
                 timezone=self.cst_timezone
             )
-            
+
             self.scheduler.add_job(
                 self.capture_weekly_leaderboard,
                 trigger=trigger,
@@ -114,13 +124,13 @@ class WeeklyLeaderboardScheduler:
                 name='Weekly Leaderboard Capture',
                 replace_existing=True
             )
-            
+
             self.scheduler.start()
-            
+
             # Calculate next run time for logging
             next_run = self.scheduler.get_job('weekly_leaderboard_capture').next_run_time
             logger.info(f"Weekly leaderboard scheduler started. Next capture: {next_run}")
-            
+
         except Exception as e:
             logger.error(f"Error starting weekly leaderboard scheduler: {e}")
     
