@@ -141,7 +141,8 @@ async def wager_command(ctx):
         
         # Check for new milestones
         monthly_wager = wager_data.get('monthly', 0)
-        new_milestones = await self.milestone_tracker.check_milestones(username, monthly_wager)
+        milestone_tracker = MilestoneTracker()
+        new_milestones = await milestone_tracker.check_milestones(username, monthly_wager)
         
         # Create embed
         embed = discord.Embed(
@@ -193,7 +194,8 @@ async def milestones_command(ctx):
         monthly_wager = wager_data.get('monthly', 0) if wager_data else 0
         
         # Get milestone progress
-        message = await self.milestone_tracker.get_milestone_progress_message(username, monthly_wager, platform='discord')
+        milestone_tracker = MilestoneTracker()
+        message, _ = await milestone_tracker.get_milestone_progress_message(username, monthly_wager)
         
         # Create embed
         embed = discord.Embed(
