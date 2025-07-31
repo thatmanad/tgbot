@@ -212,53 +212,69 @@ class DatabaseManager:
 # Global database manager instance
 db_manager = DatabaseManager()
 
-async def get_user(telegram_id: int) -> Optional[Dict[str, Any]]:
-    """Get user by Telegram ID."""
+async def get_user(telegram_id: int = None, discord_id: int = None) -> Optional[Dict[str, Any]]:
+    """Get user by Telegram ID or Discord ID."""
     async with db_manager._lock:
         try:
             conn = sqlite3.connect(db_manager.db_path)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            
-            cursor.execute(
-                "SELECT * FROM users WHERE telegram_id = ? AND is_active = 1",
-                (telegram_id,)
-            )
-            
+
+            if discord_id:
+                cursor.execute(
+                    "SELECT * FROM users WHERE discord_id = ? AND is_active = 1",
+                    (discord_id,)
+                )
+            elif telegram_id:
+                cursor.execute(
+                    "SELECT * FROM users WHERE telegram_id = ? AND is_active = 1",
+                    (telegram_id,)
+                )
+            else:
+                conn.close()
+                return None
+
             row = cursor.fetchone()
             conn.close()
-            
+
             if row:
                 return dict(row)
             return None
-            
+
         except Exception as e:
-            logger.error(f"Error getting user {telegram_id}: {e}")
+            logger.error(f"Error getting user (telegram: {telegram_id}, discord: {discord_id}): {e}")
             return None
 
-async def create_user(telegram_id: int, telegram_username: Optional[str], goated_username: str) -> bool:
-    """Create a new user."""
+async def create_user(telegram_id: int = None, telegram_username: Optional[str] = None, goated_username: str = None,
+                     discord_id: int = None, discord_username: str = None, platform: str = 'telegram') -> bool:
+    """Create a new user for either Telegram or Discord."""
     async with db_manager._lock:
         try:
             conn = sqlite3.connect(db_manager.db_path)
             cursor = conn.cursor()
 
-            cursor.execute('''
-                INSERT INTO users (telegram_id, telegram_username, goated_username)
-                VALUES (?, ?, ?)
-            ''', (telegram_id, telegram_username, goated_username))
+            if platform == 'discord':
+                cursor.execute('''
+                    INSERT INTO users (discord_id, discord_username, goated_username, platform)
+                    VALUES (?, ?, ?, ?)
+                ''', (discord_id, discord_username, goated_username, platform))
+                logger.info(f"Created Discord user {discord_id} with goated username {goated_username}")
+            else:
+                cursor.execute('''
+                    INSERT INTO users (telegram_id, telegram_username, goated_username, platform)
+                    VALUES (?, ?, ?, ?)
+                ''', (telegram_id, telegram_username, goated_username, platform))
+                logger.info(f"Created Telegram user {telegram_id} with goated username {goated_username}")
 
             conn.commit()
             conn.close()
-
-            logger.info(f"Created user {telegram_id} with goated username {goated_username}")
             return True
 
         except sqlite3.IntegrityError as e:
             logger.error(f"User creation failed - duplicate goated username: {e}")
             return False
         except Exception as e:
-            logger.error(f"Error creating user {telegram_id}: {e}")
+            logger.error(f"Error creating user: {e}")
             return False
 
 async def update_user(telegram_id: int, **kwargs) -> bool:
