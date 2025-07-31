@@ -108,6 +108,9 @@ async def setup_discord_bot():
 async def run_both_bots():
     """Run both Telegram and Discord bots concurrently."""
     logger = setup_logging()
+
+    logger.info("🚀 STARTING DUAL PLATFORM BOT (main_dual.py)")
+    logger.info("🤖 This will run both Telegram and Discord bots")
     
     # Initialize database
     try:
