@@ -40,6 +40,18 @@ class GoatedWagerDiscordBot(commands.Bot):
         """Called when the bot is ready."""
         logger.info(f'{self.user} has connected to Discord!')
         logger.info(f'Bot is in {len(self.guilds)} guilds')
+
+        # List the guilds for debugging
+        for guild in self.guilds:
+            logger.info(f'Connected to guild: {guild.name} (id: {guild.id})')
+
+    async def setup_hook(self):
+        """Called when the bot is starting up."""
+        logger.info("Discord bot is starting up...")
+
+    async def on_connect(self):
+        """Called when the bot connects to Discord."""
+        logger.info("Discord bot connected to Discord gateway")
     
     async def on_command_error(self, ctx, error):
         """Handle command errors."""

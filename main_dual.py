@@ -94,8 +94,16 @@ async def setup_discord_bot():
     discord_token = os.getenv('DISCORD_BOT_TOKEN')
     if not discord_token:
         return None
-    
-    return discord_bot, discord_token
+
+    try:
+        # Test if the token is valid format
+        if not discord_token.startswith(('Bot ', 'MTk', 'MTA', 'MTI', 'MTE', 'MTM', 'MTQ', 'MTU', 'MTY', 'MTc', 'MTg')):
+            logger.warning("Discord token format looks incorrect")
+
+        return discord_bot, discord_token
+    except Exception as e:
+        logger.error(f"Error setting up Discord bot: {e}")
+        return None
 
 async def run_both_bots():
     """Run both Telegram and Discord bots concurrently."""
@@ -152,7 +160,14 @@ async def run_both_bots():
     if discord_setup:
         discord_bot_instance, discord_token = discord_setup
         logger.info("Starting Discord bot...")
-        tasks.append(discord_bot_instance.start(discord_token))
+
+        async def run_discord():
+            try:
+                await discord_bot_instance.start(discord_token)
+            except Exception as e:
+                logger.error(f"Discord bot failed to start: {e}")
+
+        tasks.append(run_discord())
     else:
         logger.warning("No Discord bot token found, skipping Discord bot")
     
