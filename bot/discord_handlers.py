@@ -98,9 +98,11 @@ async def register_command(ctx, username: str = None):
             await api.close()
         
         # Create user account
-        success = await create_user(user_id, discord_username, username, platform='discord')
-        
+        logger.info(f"Creating Discord user account for {username} (ID: {user_id})")
+        success = await create_user(discord_id=user_id, discord_username=discord_username, goated_username=username, platform='discord')
+
         if success:
+            logger.info(f"Successfully created Discord user: {username}")
             embed = discord.Embed(
                 title="✅ Registration Successful!",
                 description=f"Welcome **{username}**! You can now use all bot commands.",
@@ -110,6 +112,7 @@ async def register_command(ctx, username: str = None):
             await ctx.send(embed=embed)
             await log_command_usage(user_id, "discord_register", True)
         else:
+            logger.error(f"Failed to create Discord user: {username} (ID: {user_id})")
             await ctx.send("❌ **Registration failed.** Please try again later.")
             await log_command_usage(user_id, "discord_register", False, "Database error")
             

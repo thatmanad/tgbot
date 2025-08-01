@@ -116,11 +116,16 @@ def run_both_bots():
     try:
         import asyncio
         from database.connection import db_manager
+        from railway_migrate import ensure_discord_support
 
         # Run database initialization
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(db_manager.init_database())
+
+        # Ensure Discord support is added
+        loop.run_until_complete(ensure_discord_support())
+
         loop.close()
 
         logger.info("Database initialized successfully")
