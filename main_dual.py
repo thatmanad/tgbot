@@ -115,15 +115,7 @@ async def run_both_bots():
     # Initialize database
     try:
         from database.connection import db_manager
-        
-        # Create new event loop if none exists
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        loop.run_until_complete(db_manager.init_database())
+        await db_manager.init_database()
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
@@ -155,10 +147,17 @@ async def run_both_bots():
     # Start Telegram bot if token is available
     if telegram_app:
         logger.info("Starting Telegram bot...")
-        tasks.append(telegram_app.run_polling(allowed_updates=["message", "callback_query"]))
+
+        async def run_telegram():
+            try:
+                await telegram_app.run_polling(allowed_updates=["message", "callback_query"])
+            except Exception as e:
+                logger.error(f"Telegram bot failed to start: {e}")
+
+        tasks.append(run_telegram())
     else:
         logger.warning("No Telegram bot token found, skipping Telegram bot")
-    
+
     # Start Discord bot if token is available
     if discord_setup:
         discord_bot_instance, discord_token = discord_setup
@@ -188,18 +187,14 @@ async def run_both_bots():
 
 def main():
     """Main function to start both bots."""
-    # Ensure we have an event loop for the bots
+    # Run both bots using asyncio.run which handles the event loop properly
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    
-    # Run both bots
-    asyncio.run(run_both_bots())
+        asyncio.run(run_both_bots())
+    except KeyboardInterrupt:
+        print("Bot stopped by user")
+    except Exception as e:
+        print(f"Bot crashed: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
