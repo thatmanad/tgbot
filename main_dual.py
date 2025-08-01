@@ -165,7 +165,8 @@ def run_both_bots():
         run_discord_only(discord_token)
 
 def run_telegram_only(token):
-    """Run only the Telegram bot."""
+    """Run only the Telegram bot with proper event loop."""
+    import asyncio
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler
     from bot.handlers import (
         start_handler, register_handler, unregister_handler, confirm_unregister_handler,
@@ -175,30 +176,40 @@ def run_telegram_only(token):
         weekly_leaderboard, capture_leaderboard, error_handler
     )
 
-    application = Application.builder().token(token).build()
+    # Create new event loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
-    # Add handlers
-    application.add_handler(CommandHandler("start", start_handler))
-    application.add_handler(CommandHandler("register", register_handler))
-    application.add_handler(CommandHandler("unregister", unregister_handler))
-    application.add_handler(CommandHandler("confirm_unregister", confirm_unregister_handler))
-    application.add_handler(CommandHandler("wager", wager_handler))
-    application.add_handler(CommandHandler("leaderboard", leaderboard_handler))
-    application.add_handler(CommandHandler("help", help_handler))
-    application.add_handler(CommandHandler("milestones", milestones_handler))
-    application.add_handler(CommandHandler("milestone_info", milestone_info_handler))
-    application.add_handler(CallbackQueryHandler(milestone_callback_handler))
-    application.add_handler(CommandHandler("users", list_users))
-    application.add_handler(CommandHandler("stats", stats))
-    application.add_handler(CommandHandler("weekly_leaderboard", weekly_leaderboard))
-    application.add_handler(CommandHandler("capture_leaderboard", capture_leaderboard))
-    application.add_handler(CommandHandler("pending", pending_requests_handler))
-    application.add_handler(CommandHandler("approve", approve_request_handler))
-    application.add_handler(CommandHandler("deny", deny_request_handler))
-    application.add_error_handler(error_handler)
+    try:
+        application = Application.builder().token(token).build()
 
-    # Run the bot
-    application.run_polling(allowed_updates=["message", "callback_query"])
+        # Add handlers
+        application.add_handler(CommandHandler("start", start_handler))
+        application.add_handler(CommandHandler("register", register_handler))
+        application.add_handler(CommandHandler("unregister", unregister_handler))
+        application.add_handler(CommandHandler("confirm_unregister", confirm_unregister_handler))
+        application.add_handler(CommandHandler("wager", wager_handler))
+        application.add_handler(CommandHandler("leaderboard", leaderboard_handler))
+        application.add_handler(CommandHandler("help", help_handler))
+        application.add_handler(CommandHandler("milestones", milestones_handler))
+        application.add_handler(CommandHandler("milestone_info", milestone_info_handler))
+        application.add_handler(CallbackQueryHandler(milestone_callback_handler))
+        application.add_handler(CommandHandler("users", list_users))
+        application.add_handler(CommandHandler("stats", stats))
+        application.add_handler(CommandHandler("weekly_leaderboard", weekly_leaderboard))
+        application.add_handler(CommandHandler("capture_leaderboard", capture_leaderboard))
+        application.add_handler(CommandHandler("pending", pending_requests_handler))
+        application.add_handler(CommandHandler("approve", approve_request_handler))
+        application.add_handler(CommandHandler("deny", deny_request_handler))
+        application.add_error_handler(error_handler)
+
+        # Run the bot
+        application.run_polling(allowed_updates=["message", "callback_query"])
+
+    except Exception as e:
+        print(f"Telegram bot error: {e}")
+    finally:
+        loop.close()
 
 def run_discord_only(token):
     """Run only the Discord bot."""
@@ -208,19 +219,39 @@ def run_discord_only(token):
 def run_dual_bots(telegram_token, discord_token):
     """Run both bots using threading."""
     import threading
+    import time
 
     def run_telegram():
-        run_telegram_only(telegram_token)
+        try:
+            print("Starting Telegram bot in thread...")
+            run_telegram_only(telegram_token)
+        except Exception as e:
+            print(f"Telegram bot thread error: {e}")
 
     def run_discord():
-        run_discord_only(discord_token)
+        try:
+            print("Starting Discord bot in main thread...")
+            run_discord_only(discord_token)
+        except Exception as e:
+            print(f"Discord bot error: {e}")
 
     # Start Telegram bot in a separate thread
-    telegram_thread = threading.Thread(target=run_telegram, daemon=True)
+    telegram_thread = threading.Thread(target=run_telegram, daemon=False, name="TelegramBot")
     telegram_thread.start()
 
-    # Run Discord bot in main thread
-    run_discord_only(discord_token)
+    # Give Telegram bot a moment to start
+    time.sleep(2)
+
+    # Run Discord bot in main thread (this will block)
+    try:
+        run_discord_only(discord_token)
+    except KeyboardInterrupt:
+        print("Shutting down bots...")
+    except Exception as e:
+        print(f"Discord bot crashed: {e}")
+
+    # Wait for Telegram thread to finish
+    telegram_thread.join(timeout=5)
 
 def main():
     """Main function to start both bots."""
