@@ -235,11 +235,18 @@ def run_telegram_only(token):
     asyncio.set_event_loop(loop)
 
     try:
+        print("🔄 Creating Telegram event loop...")
         loop.run_until_complete(run_telegram_async())
     except Exception as e:
-        print(f"Telegram bot thread error: {e}")
+        print(f"❌ Telegram bot thread error: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
-        loop.close()
+        try:
+            loop.close()
+            print("🔄 Telegram event loop closed")
+        except:
+            pass
 
 def run_discord_only(token):
     """Run only the Discord bot."""
@@ -247,41 +254,61 @@ def run_discord_only(token):
     discord_bot.run(token)
 
 def run_dual_bots(telegram_token, discord_token):
-    """Run both bots using threading."""
+    """Run both bots using threading with better error handling."""
     import threading
     import time
 
+    telegram_running = threading.Event()
+
     def run_telegram():
         try:
-            print("Starting Telegram bot in thread...")
+            print("🤖 Starting Telegram bot in thread...")
             run_telegram_only(telegram_token)
+            telegram_running.set()
         except Exception as e:
-            print(f"Telegram bot thread error: {e}")
+            print(f"❌ Telegram bot thread error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def run_discord():
         try:
-            print("Starting Discord bot in main thread...")
+            print("🤖 Starting Discord bot in main thread...")
             run_discord_only(discord_token)
         except Exception as e:
-            print(f"Discord bot error: {e}")
+            print(f"❌ Discord bot error: {e}")
+            import traceback
+            traceback.print_exc()
 
     # Start Telegram bot in a separate thread
     telegram_thread = threading.Thread(target=run_telegram, daemon=False, name="TelegramBot")
     telegram_thread.start()
 
     # Give Telegram bot a moment to start
-    time.sleep(2)
+    print("⏳ Waiting for Telegram bot to initialize...")
+    time.sleep(5)
+
+    # Check if Telegram bot started successfully
+    if telegram_thread.is_alive():
+        print("✅ Telegram bot thread is running")
+    else:
+        print("❌ Telegram bot thread died during startup")
 
     # Run Discord bot in main thread (this will block)
     try:
         run_discord_only(discord_token)
     except KeyboardInterrupt:
-        print("Shutting down bots...")
+        print("🛑 Shutting down bots...")
     except Exception as e:
-        print(f"Discord bot crashed: {e}")
+        print(f"❌ Discord bot crashed: {e}")
+        import traceback
+        traceback.print_exc()
 
     # Wait for Telegram thread to finish
-    telegram_thread.join(timeout=5)
+    print("⏳ Waiting for Telegram thread to finish...")
+    telegram_thread.join(timeout=10)
+
+    if telegram_thread.is_alive():
+        print("⚠️ Telegram thread still running after timeout")
 
 def main():
     """Main function to start both bots."""
