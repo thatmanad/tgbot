@@ -122,10 +122,31 @@ async def main():
     # Run the bot
     logger.info("🚀 Starting Telegram bot...")
     try:
-        await application.run_polling(allowed_updates=["message", "callback_query"])
+        # Initialize and start the application
+        await application.initialize()
+        await application.start()
+
+        # Start polling
+        await application.updater.start_polling(allowed_updates=["message", "callback_query"])
+
+        logger.info("✅ Telegram bot started successfully and is running...")
+
+        # Keep running until stopped
+        try:
+            while True:
+                await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("Telegram bot stopped by user")
+
     except Exception as e:
         logger.error(f"❌ Telegram bot error: {e}")
         raise
+    finally:
+        try:
+            await application.stop()
+            await application.shutdown()
+        except:
+            pass
 
 if __name__ == "__main__":
     try:

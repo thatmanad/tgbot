@@ -216,11 +216,17 @@ def run_telegram_only(token):
             print("✅ Telegram bot started successfully")
 
             # Keep running until stopped
+            print("✅ Telegram bot is running and waiting for messages...")
+
             try:
-                # Use application.idle() instead of updater.idle()
-                await application.idle()
+                # Keep the bot running indefinitely using a simple sleep loop
+                while True:
+                    await asyncio.sleep(1)
+
             except KeyboardInterrupt:
                 print("Telegram bot stopped by user")
+            except Exception as e:
+                print(f"Telegram bot error during idle: {e}")
 
         except Exception as e:
             print(f"Telegram bot error: {e}")
