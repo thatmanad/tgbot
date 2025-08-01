@@ -1,2 +1,2 @@
-# Telegram-only bot for testing
-worker: python main_telegram_only.py
+# Clean Telegram bot
+worker: python main.py
