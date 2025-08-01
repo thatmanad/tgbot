@@ -105,17 +105,24 @@ async def setup_discord_bot():
         logger.error(f"Error setting up Discord bot: {e}")
         return None
 
-async def run_both_bots():
+def run_both_bots():
     """Run both Telegram and Discord bots concurrently."""
     logger = setup_logging()
 
     logger.info("🚀 STARTING DUAL PLATFORM BOT (main_dual.py)")
     logger.info("🤖 This will run both Telegram and Discord bots")
-    
-    # Initialize database
+
+    # Initialize database synchronously first
     try:
+        import asyncio
         from database.connection import db_manager
-        await db_manager.init_database()
+
+        # Run database initialization
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(db_manager.init_database())
+        loop.close()
+
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
@@ -138,58 +145,87 @@ async def run_both_bots():
     except Exception as e:
         logger.error(f"Failed to initialize weekly scheduler: {e}")
 
-    # Set up bots
-    telegram_app = await setup_telegram_bot()
-    discord_setup = await setup_discord_bot()
-    
-    tasks = []
-    
-    # Start Telegram bot if token is available
-    if telegram_app:
-        logger.info("Starting Telegram bot...")
+    # Check which bots to run
+    telegram_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    discord_token = os.getenv('DISCORD_BOT_TOKEN')
 
-        async def run_telegram():
-            try:
-                await telegram_app.run_polling(allowed_updates=["message", "callback_query"])
-            except Exception as e:
-                logger.error(f"Telegram bot failed to start: {e}")
-
-        tasks.append(run_telegram())
-    else:
-        logger.warning("No Telegram bot token found, skipping Telegram bot")
-
-    # Start Discord bot if token is available
-    if discord_setup:
-        discord_bot_instance, discord_token = discord_setup
-        logger.info("Starting Discord bot...")
-
-        async def run_discord():
-            try:
-                await discord_bot_instance.start(discord_token)
-            except Exception as e:
-                logger.error(f"Discord bot failed to start: {e}")
-
-        tasks.append(run_discord())
-    else:
-        logger.warning("No Discord bot token found, skipping Discord bot")
-    
-    if not tasks:
+    if not telegram_token and not discord_token:
         logger.error("No bot tokens found! Please set TELEGRAM_BOT_TOKEN and/or DISCORD_BOT_TOKEN")
         sys.exit(1)
-    
-    # Run both bots concurrently
-    try:
-        await asyncio.gather(*tasks)
-    except KeyboardInterrupt:
-        logger.info("Shutting down bots...")
-    except Exception as e:
-        logger.error(f"Error running bots: {e}")
+
+    # Run bots based on available tokens
+    if telegram_token and discord_token:
+        logger.info("Running both Telegram and Discord bots...")
+        run_dual_bots(telegram_token, discord_token)
+    elif telegram_token:
+        logger.info("Running Telegram bot only...")
+        run_telegram_only(telegram_token)
+    elif discord_token:
+        logger.info("Running Discord bot only...")
+        run_discord_only(discord_token)
+
+def run_telegram_only(token):
+    """Run only the Telegram bot."""
+    from telegram.ext import Application, CommandHandler, CallbackQueryHandler
+    from bot.handlers import (
+        start_handler, register_handler, unregister_handler, confirm_unregister_handler,
+        wager_handler, leaderboard_handler, help_handler, milestones_handler,
+        milestone_info_handler, milestone_callback_handler, pending_requests_handler,
+        approve_request_handler, deny_request_handler, list_users, stats,
+        weekly_leaderboard, capture_leaderboard, error_handler
+    )
+
+    application = Application.builder().token(token).build()
+
+    # Add handlers
+    application.add_handler(CommandHandler("start", start_handler))
+    application.add_handler(CommandHandler("register", register_handler))
+    application.add_handler(CommandHandler("unregister", unregister_handler))
+    application.add_handler(CommandHandler("confirm_unregister", confirm_unregister_handler))
+    application.add_handler(CommandHandler("wager", wager_handler))
+    application.add_handler(CommandHandler("leaderboard", leaderboard_handler))
+    application.add_handler(CommandHandler("help", help_handler))
+    application.add_handler(CommandHandler("milestones", milestones_handler))
+    application.add_handler(CommandHandler("milestone_info", milestone_info_handler))
+    application.add_handler(CallbackQueryHandler(milestone_callback_handler))
+    application.add_handler(CommandHandler("users", list_users))
+    application.add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("weekly_leaderboard", weekly_leaderboard))
+    application.add_handler(CommandHandler("capture_leaderboard", capture_leaderboard))
+    application.add_handler(CommandHandler("pending", pending_requests_handler))
+    application.add_handler(CommandHandler("approve", approve_request_handler))
+    application.add_handler(CommandHandler("deny", deny_request_handler))
+    application.add_error_handler(error_handler)
+
+    # Run the bot
+    application.run_polling(allowed_updates=["message", "callback_query"])
+
+def run_discord_only(token):
+    """Run only the Discord bot."""
+    from bot.discord_handlers import discord_bot
+    discord_bot.run(token)
+
+def run_dual_bots(telegram_token, discord_token):
+    """Run both bots using threading."""
+    import threading
+
+    def run_telegram():
+        run_telegram_only(telegram_token)
+
+    def run_discord():
+        run_discord_only(discord_token)
+
+    # Start Telegram bot in a separate thread
+    telegram_thread = threading.Thread(target=run_telegram, daemon=True)
+    telegram_thread.start()
+
+    # Run Discord bot in main thread
+    run_discord_only(discord_token)
 
 def main():
     """Main function to start both bots."""
-    # Run both bots using asyncio.run which handles the event loop properly
     try:
-        asyncio.run(run_both_bots())
+        run_both_bots()
     except KeyboardInterrupt:
         print("Bot stopped by user")
     except Exception as e:
