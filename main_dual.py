@@ -217,7 +217,8 @@ def run_telegram_only(token):
 
             # Keep running until stopped
             try:
-                await application.updater.idle()
+                # Use application.idle() instead of updater.idle()
+                await application.idle()
             except KeyboardInterrupt:
                 print("Telegram bot stopped by user")
 
