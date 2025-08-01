@@ -1047,7 +1047,7 @@ async def get_user_data_summary(telegram_id: int) -> Optional[Dict[str, Any]]:
             logger.error(f"Error getting user data summary for {telegram_id}: {e}")
             return None
 
-async def log_command_usage(telegram_id: int, command: str, success: bool = True, error_message: Optional[str] = None) -> bool:
+async def log_command_usage(user_id: int, command: str, success: bool = True, error_message: Optional[str] = None, platform: str = 'telegram') -> bool:
     """Log command usage for analytics."""
     try:
         # Use a shorter timeout and skip if database is busy
@@ -1066,10 +1066,12 @@ async def log_command_usage(telegram_id: int, command: str, success: bool = True
             conn.close()
             return True
 
+        # Use telegram_id for backward compatibility, but log platform info in command
+        platform_command = f"{platform}_{command}"
         cursor.execute('''
             INSERT INTO bot_stats (telegram_id, command, success, error_message)
             VALUES (?, ?, ?, ?)
-        ''', (telegram_id, command, success, error_message))
+        ''', (user_id, platform_command, success, error_message))
 
         conn.commit()
         conn.close()

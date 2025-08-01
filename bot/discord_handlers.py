@@ -75,51 +75,73 @@ async def register_command(ctx, username: str = None):
     
     if not username:
         await ctx.send("❌ **Usage:** `!register YOUR_USERNAME`")
-        await log_command_usage(user_id, "discord_register", False, "Missing username")
+        await log_command_usage(user_id, "register", False, "Missing username", "discord")
         return
     
     try:
+        logger.info(f"Step 1: Checking if Discord user {user_id} already exists")
+
         # Check if user already exists
         existing_user = await get_user(discord_id=user_id)
         if existing_user:
+            logger.info(f"User {user_id} already registered as {existing_user['goated_username']}")
             await ctx.send(f"✅ You're already registered as **{existing_user['goated_username']}**")
-            await log_command_usage(user_id, "discord_register", True, "Already registered")
+            await log_command_usage(user_id, "register", True, "Already registered", "discord")
             return
-        
+
+        logger.info(f"Step 2: Validating username '{username}' with API")
+
         # Validate username with API
         api = GoatedAPI()
         try:
             player_data = await api.find_player_by_username(username)
             if not player_data:
+                logger.warning(f"Username '{username}' not found in API")
                 await ctx.send(f"❌ **Username not found:** `{username}`\n\nMake sure you're using your exact goated.com username.")
-                await log_command_usage(user_id, "discord_register", False, "Username not found")
+                await log_command_usage(user_id, "register", False, "Username not found", "discord")
                 return
+            else:
+                logger.info(f"Username '{username}' found in API: {player_data.get('name')}")
+        except Exception as api_error:
+            logger.error(f"API error during username validation: {api_error}")
+            await ctx.send(f"❌ **API Error:** Could not validate username. Please try again later.")
+            await log_command_usage(user_id, "register", False, f"API error: {api_error}", "discord")
+            return
         finally:
             await api.close()
-        
-        # Create user account
-        logger.info(f"Creating Discord user account for {username} (ID: {user_id})")
-        success = await create_user(discord_id=user_id, discord_username=discord_username, goated_username=username, platform='discord')
 
-        if success:
-            logger.info(f"Successfully created Discord user: {username}")
-            embed = discord.Embed(
-                title="✅ Registration Successful!",
-                description=f"Welcome **{username}**! You can now use all bot commands.",
-                color=discord.Color.green()
-            )
-            embed.add_field(name="Next Steps", value="• Use `!wager` to check your stats\n• Use `!milestones` to track progress\n• Use `!help` for all commands", inline=False)
-            await ctx.send(embed=embed)
-            await log_command_usage(user_id, "discord_register", True)
-        else:
-            logger.error(f"Failed to create Discord user: {username} (ID: {user_id})")
-            await ctx.send("❌ **Registration failed.** Please try again later.")
-            await log_command_usage(user_id, "discord_register", False, "Database error")
-            
+        logger.info(f"Step 3: Creating Discord user account for {username} (ID: {user_id})")
+
+        # Create user account
+        try:
+            success = await create_user(discord_id=user_id, discord_username=discord_username, goated_username=username, platform='discord')
+
+            if success:
+                logger.info(f"Successfully created Discord user: {username}")
+                embed = discord.Embed(
+                    title="✅ Registration Successful!",
+                    description=f"Welcome **{username}**! You can now use all bot commands.",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="Next Steps", value="• Use `!wager` to check your stats\n• Use `!milestones` to track progress\n• Use `!help` for all commands", inline=False)
+                await ctx.send(embed=embed)
+                await log_command_usage(user_id, "register", True, None, "discord")
+            else:
+                logger.error(f"Database returned False when creating Discord user: {username} (ID: {user_id})")
+                await ctx.send("❌ **Registration failed.** Database error. Please try again later.")
+                await log_command_usage(user_id, "register", False, "Database returned False", "discord")
+
+        except Exception as db_error:
+            logger.error(f"Database error creating Discord user: {db_error}")
+            await ctx.send("❌ **Registration failed.** Database error. Please try again later.")
+            await log_command_usage(user_id, "register", False, f"Database error: {db_error}", "discord")
+
     except Exception as e:
-        logger.error(f"Error in Discord register command for user {user_id}: {e}")
+        logger.error(f"Unexpected error in Discord register command for user {user_id}: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         await ctx.send("❌ **Error during registration.** Please try again later.")
-        await log_command_usage(user_id, "discord_register", False, str(e))
+        await log_command_usage(user_id, "register", False, str(e), "discord")
 
 @discord_bot.command(name='wager')
 async def wager_command(ctx):
@@ -132,11 +154,11 @@ async def wager_command(ctx):
         user_data = await get_user(discord_id=user_id)
         if not user_data:
             await ctx.send("❌ **Not registered!** Use `!register YOUR_USERNAME` first.")
-            await log_command_usage(user_id, "discord_wager", False, "User not registered")
+            await log_command_usage(user_id, "wager", False, "User not registered", "discord")
             return
-        
+
         username = user_data['goated_username']
-        
+
         # Get wager data
         wager_data = await get_cached_wager_data(username)
         if not wager_data:
@@ -149,10 +171,10 @@ async def wager_command(ctx):
                     await cache_wager_data(username, wager_data)
             finally:
                 await api.close()
-        
+
         if not wager_data:
             await ctx.send(f"❌ **No wager data found** for {username}")
-            await log_command_usage(user_id, "discord_wager", False, "No wager data")
+            await log_command_usage(user_id, "wager", False, "No wager data", "discord")
             return
         
         # Check for new milestones
@@ -182,12 +204,12 @@ async def wager_command(ctx):
         embed.set_footer(text="Use !milestones to see all milestone progress")
         
         await ctx.send(embed=embed)
-        await log_command_usage(user_id, "discord_wager", True)
-        
+        await log_command_usage(user_id, "wager", True, None, "discord")
+
     except Exception as e:
         logger.error(f"Error in Discord wager command for user {user_id}: {e}")
         await ctx.send("❌ **Error fetching wager data.** Please try again later.")
-        await log_command_usage(user_id, "discord_wager", False, str(e))
+        await log_command_usage(user_id, "wager", False, str(e), "discord")
 
 @discord_bot.command(name='milestones')
 async def milestones_command(ctx):
@@ -200,33 +222,33 @@ async def milestones_command(ctx):
         user_data = await get_user(discord_id=user_id)
         if not user_data:
             await ctx.send("❌ **Not registered!** Use `!register YOUR_USERNAME` first.")
-            await log_command_usage(user_id, "discord_milestones", False, "User not registered")
+            await log_command_usage(user_id, "milestones", False, "User not registered", "discord")
             return
-        
+
         username = user_data['goated_username']
-        
+
         # Get current monthly wager
         wager_data = await get_cached_wager_data(username)
         monthly_wager = wager_data.get('monthly', 0) if wager_data else 0
-        
+
         # Get milestone progress
         milestone_tracker = MilestoneTracker()
         message, _ = await milestone_tracker.get_milestone_progress_message(username, monthly_wager)
-        
+
         # Create embed
         embed = discord.Embed(
             title="🏆 Monthly Milestone Progress",
             description=message,
             color=discord.Color.gold()
         )
-        
+
         await ctx.send(embed=embed)
-        await log_command_usage(user_id, "discord_milestones", True)
-        
+        await log_command_usage(user_id, "milestones", True, None, "discord")
+
     except Exception as e:
         logger.error(f"Error in Discord milestones command for user {user_id}: {e}")
         await ctx.send("❌ **Error fetching milestone data.** Please try again later.")
-        await log_command_usage(user_id, "discord_milestones", False, str(e))
+        await log_command_usage(user_id, "milestones", False, str(e), "discord")
 
 @discord_bot.command(name='help')
 async def help_command(ctx):
