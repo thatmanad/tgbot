@@ -23,15 +23,16 @@ logger = logging.getLogger(__name__)
 
 class GoatedWagerDiscordBot(commands.Bot):
     """Discord bot for Goated Wager tracking."""
-    
+
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
-        
+
         super().__init__(
             command_prefix='!',
             intents=intents,
-            description='Goated Wager Tracker Bot'
+            description='Goated Wager Tracker Bot',
+            help_command=None  # Disable the default help command
         )
         
         self.milestone_tracker = MilestoneTracker()
@@ -232,7 +233,7 @@ async def help_command(ctx):
         description="Track your goated.com wager statistics and milestones",
         color=discord.Color.purple()
     )
-    
+
     embed.add_field(
         name="📋 User Commands",
         value="`!register USERNAME` - Register your goated.com account\n"
@@ -242,9 +243,14 @@ async def help_command(ctx):
               "`!help` - Show this help message",
         inline=False
     )
-    
+
     embed.set_footer(text="Bot also available on Telegram!")
     await ctx.send(embed=embed)
+
+@discord_bot.command(name='commands')
+async def commands_command(ctx):
+    """Alias for help command."""
+    await help_command(ctx)
 
 # Export the bot instance
 __all__ = ['discord_bot']
