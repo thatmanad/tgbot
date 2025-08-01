@@ -165,7 +165,7 @@ def run_both_bots():
         run_discord_only(discord_token)
 
 def run_telegram_only(token):
-    """Run only the Telegram bot with proper event loop."""
+    """Run only the Telegram bot with proper async handling."""
     import asyncio
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler
     from bot.handlers import (
@@ -176,38 +176,63 @@ def run_telegram_only(token):
         weekly_leaderboard, capture_leaderboard, error_handler
     )
 
-    # Create new event loop for this thread
+    async def run_telegram_async():
+        """Async function to run Telegram bot."""
+        try:
+            application = Application.builder().token(token).build()
+
+            # Add handlers
+            application.add_handler(CommandHandler("start", start_handler))
+            application.add_handler(CommandHandler("register", register_handler))
+            application.add_handler(CommandHandler("unregister", unregister_handler))
+            application.add_handler(CommandHandler("confirm_unregister", confirm_unregister_handler))
+            application.add_handler(CommandHandler("wager", wager_handler))
+            application.add_handler(CommandHandler("leaderboard", leaderboard_handler))
+            application.add_handler(CommandHandler("help", help_handler))
+            application.add_handler(CommandHandler("milestones", milestones_handler))
+            application.add_handler(CommandHandler("milestone_info", milestone_info_handler))
+            application.add_handler(CallbackQueryHandler(milestone_callback_handler))
+            application.add_handler(CommandHandler("users", list_users))
+            application.add_handler(CommandHandler("stats", stats))
+            application.add_handler(CommandHandler("weekly_leaderboard", weekly_leaderboard))
+            application.add_handler(CommandHandler("capture_leaderboard", capture_leaderboard))
+            application.add_handler(CommandHandler("pending", pending_requests_handler))
+            application.add_handler(CommandHandler("approve", approve_request_handler))
+            application.add_handler(CommandHandler("deny", deny_request_handler))
+            application.add_error_handler(error_handler)
+
+            # Initialize and start the application
+            await application.initialize()
+            await application.start()
+
+            # Start polling
+            await application.updater.start_polling(allowed_updates=["message", "callback_query"])
+
+            print("✅ Telegram bot started successfully")
+
+            # Keep running until stopped
+            try:
+                await application.updater.idle()
+            except KeyboardInterrupt:
+                print("Telegram bot stopped by user")
+
+        except Exception as e:
+            print(f"Telegram bot error: {e}")
+        finally:
+            try:
+                await application.stop()
+                await application.shutdown()
+            except:
+                pass
+
+    # Create new event loop for this thread and run the async function
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     try:
-        application = Application.builder().token(token).build()
-
-        # Add handlers
-        application.add_handler(CommandHandler("start", start_handler))
-        application.add_handler(CommandHandler("register", register_handler))
-        application.add_handler(CommandHandler("unregister", unregister_handler))
-        application.add_handler(CommandHandler("confirm_unregister", confirm_unregister_handler))
-        application.add_handler(CommandHandler("wager", wager_handler))
-        application.add_handler(CommandHandler("leaderboard", leaderboard_handler))
-        application.add_handler(CommandHandler("help", help_handler))
-        application.add_handler(CommandHandler("milestones", milestones_handler))
-        application.add_handler(CommandHandler("milestone_info", milestone_info_handler))
-        application.add_handler(CallbackQueryHandler(milestone_callback_handler))
-        application.add_handler(CommandHandler("users", list_users))
-        application.add_handler(CommandHandler("stats", stats))
-        application.add_handler(CommandHandler("weekly_leaderboard", weekly_leaderboard))
-        application.add_handler(CommandHandler("capture_leaderboard", capture_leaderboard))
-        application.add_handler(CommandHandler("pending", pending_requests_handler))
-        application.add_handler(CommandHandler("approve", approve_request_handler))
-        application.add_handler(CommandHandler("deny", deny_request_handler))
-        application.add_error_handler(error_handler)
-
-        # Run the bot
-        application.run_polling(allowed_updates=["message", "callback_query"])
-
+        loop.run_until_complete(run_telegram_async())
     except Exception as e:
-        print(f"Telegram bot error: {e}")
+        print(f"Telegram bot thread error: {e}")
     finally:
         loop.close()
 
