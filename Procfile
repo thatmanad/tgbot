@@ -1,2 +1,2 @@
-# Dual platform bot (Telegram + Discord)
-worker: python main_dual.py
+# Telegram-only bot for testing
+worker: python main_telegram_only.py
