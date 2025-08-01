@@ -61,7 +61,11 @@ def main():
         logger.error("TELEGRAM_BOT_TOKEN not found in environment variables")
         sys.exit(1)
 
-    logger.info("Starting Goated Wager Tracker Bot...")
+    logger.info("🤖 Starting TELEGRAM-ONLY Goated Wager Tracker Bot...")
+
+    # Ensure no Discord bot is started
+    if os.getenv('DISCORD_BOT_TOKEN'):
+        logger.warning("Discord token found but this is Telegram-only deployment - ignoring Discord token")
 
     # Initialize database
     try:
